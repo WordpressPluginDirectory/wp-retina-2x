@@ -1,15 +1,15 @@
-=== Perfect Images ===
+=== Perfect Images: Regenerate Thumbnails, Image Sizes, WebP & AVIF ===
 Contributors: TigrouMeow
 Tags: retina, webp, avif, thumbnails, regenerate
 Donate link: https://www.patreon.com/meowapps
 Requires at least: 6.0
-Tested up to: 6.8
+Tested up to: 6.9
 Requires PHP: 7.4
-Stable tag: 7.0.7
+Stable tag: 7.1.3
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
-The foundational image management plugin for WordPress. Control image sizes, regenerate thumbnails, enable retina, add modern formats—everything you need for a clean, streamlined media library.
+Optimize image sizes, regenerate thumbnails, enable retina, convert to WebP/AVIF, or use cloud optimization. An essential image toolkit.
 
 == Description ==
 
@@ -33,8 +33,11 @@ Optional module for high-DPI displays. Automatically generate and serve crisp @2
 🎨 **Modern Formats (Module)**
 Optional WebP/AVIF conversion. Convert images to modern formats for smaller file sizes and faster loading—without replacing your originals.
 
-🤖 **AI Upscaling (Module)**
-Optional AI-powered upscaling via Claid.ai. Generate larger thumbnails than your source image, or create retina versions without needing 2x originals.
+🚀 **Easy IO (Module)**
+Optional CDN-based image optimization via EWWW. Automatically converts and delivers your images in WebP/AVIF, resizes on the fly, and serves them from a global CDN—zero server configuration required.
+
+🤖 **AI Features (Module)**
+Optional AI-powered tools. Upscale images via Claid.ai when your source is too small, or use the AI Assistant to analyze your sizes and recommend which to enable or disable based on your theme's srcset needs.
 
 == 🖼️ Retina Images ==
 
@@ -68,16 +71,25 @@ WebP and AVIF offer dramatically better compression than JPEG/PNG—up to 50% sm
 
 == 🤖 AI Features ==
 
-Perfect Images integrates with AI services like Claid.ai to unlock powerful upscaling.
+Perfect Images integrates with AI services to help you manage and optimize your images smarter.
 
-**Upscaling:**
+**AI Assistant:**
+
+* Analyzes your image sizes and recommends which to enable or disable
+* Detects redundant retina sizes already covered by other thumbnails
+* Understands srcset behavior—sizes don't need to be pixel-perfect
+* Requires [AI Engine](https://wordpress.org/plugins/ai-engine/) plugin
+
+**Upscaling (via Claid.ai):**
 
 * Generate retina images without 2x source files
 * Create thumbnails larger than the original image
 * Multiple upscaling modes (Smart Enhance, Digital Art, Photo, etc.)
 * Automatic or manual processing
 
-== ⚙️ Image Management ==
+== ⚙️ Image Tools ==
+
+The Image Tools dashboard lets you manage all your media in one place—regenerate thumbnails, build retina images, generate WebP/AVIF, and more, individually or in bulk.
 
 **Regenerate Thumbnails:**
 
@@ -117,7 +129,7 @@ Perfect Images integrates with AI services like Claid.ai to unlock powerful upsc
 Every WordPress site needs proper image size management and thumbnail control. Perfect Images makes it simple, giving you the baseline image handling WordPress should have included.
 
 **Modular & Lightweight**
-Start with just image size management and thumbnail regeneration. Enable retina, WebP, or AI modules only if you need them. No bloat, no unnecessary features.
+Start with just image size management and thumbnail regeneration. Enable retina, WebP, Easy IO, or AI modules only when you need them. No bloat, no unnecessary features.
 
 **Works with Everything**
 Compatible with WooCommerce, page builders, galleries, and any theme. It uses WordPress's native image handling, so there are no conflicts.
@@ -133,10 +145,10 @@ Developed by someone who manages dozens of WordPress sites. Every feature solves
 1. Upload `wp-retina-2x-pro` to `/wp-content/plugins/`
 2. Activate through the 'Plugins' menu
 3. Visit Perfect Images in your admin menu
-4. Enable the modules you need
-5. Start optimizing! 🚀
+4. Follow the **Setup Assistant** on the Overview tab—it walks you through configuring image sizes, retina, and optimization step by step
+5. Enable additional modules as needed
 
-For AI upscaling, sign up for [Claid.ai](https://claid.ai/pricing?via=meow) and add your API key.
+For AI upscaling, sign up for [Claid.ai](https://claid.ai/pricing?via=meow) and add your API key. For CDN delivery, enable Easy IO and connect your site.
 
 == Frequently Asked Questions ==
 
@@ -180,6 +192,32 @@ Absolutely. Use the built-in Easy IO integration, or enter your own CDN domain i
 Yes! Perfect Images lets you disable any registered size—WordPress defaults, theme sizes, plugin sizes—complete control.
 
 == Changelog ==
+
+= 7.1.3 (2026/02/23) =
+* Fix: Hotfix to prevent Easy IO and Modern Formats from being enabled at the same time.
+* Fix: Corrected disabled image sizes that were incorrectly shown as pending.
+* Update: Refreshed the Image Tools inspector.
+* Fix: Improved custom size handling by correcting the error message, switching the input to a numeric field, fixing the AI modal height, and updating the default custom size settings.
+
+= 7.1.2 (2026/02/22) =
+* Add: Introduced an AI Assistant to Image Sizes and Retina Images to help recommend optimal sizes.
+* Update: Overhauled the Dashboard and Overview tabs with redesigned size badges, clearer tooltips, a Setup Assistant, convenient module toggles, and a reordered tab flow.
+* Update: Reorganized settings with a new Dev Tools tab, a cleaner Settings layout, polished Easy IO feature cards, GIF Thumbnails now enabled by default under General, and automatic disabling of CDN Domain when Easy IO is active to avoid conflicts.
+* Fix: Improved Regenerate Thumbnails to properly skip disabled sizes, remove leftover ghost thumbnails, label untitled images, wrap size labels more neatly, and unify button text for consistency.
+* Fix: Resolved a compatibility issue where cdn_this() could fail with Polylang domain-per-language setups.
+* Fix: Prevented bulk operations from unnecessarily reloading the media list and stats.
+* 🎵 Discuss with others about Wp Retina 2x on [the Discord](https://discord.gg/bHDGh38).
+* 🌴 Keep us motivated with [a little review here](https://wordpress.org/support/plugin/wp-retina-2x/reviews/). Thank you!
+* 🥰 If you want to help us, check our [Patreon](https://www.patreon.com/meowapps). Thank you!
+
+= 7.0.9 (2025/12/16) =
+* Update: Removed legacy features.
+* Update: Enhanced UI.
+
+= 7.0.8 (2025/12/03) =
+* Update: Cleaned up duplicated code.
+* Fix: Hotfix resolved the busy/loading state.
+* Fix: Corrected tooltip positioning.
 
 = 7.0.7 (2025/11/15) =
 - Update: Moved Dashboard into Settings as the Images tab.    
