@@ -264,7 +264,7 @@ class Meow_WR2X_Rest
 		wp_update_attachment_metadata( $mediaId, wp_generate_attachment_metadata( $mediaId, $current_file ) );
 		$meta = wp_get_attachment_metadata( $mediaId );
 		$this->engine->generate_retina_images( $meta );
-		$this->engine->generate_webp_images( $meta );
+		$this->engine->generate_modern_format( $meta );
 		$this->engine->generate_webp_retina_images( $meta );
 
 		// Increase the version number
@@ -553,17 +553,23 @@ class Meow_WR2X_Rest
 		if ($search) {
 			$whereSql = $wpdb->prepare("AND post_title LIKE %s ", ( '%' . $search . '%' ));
 		}
+		// Exclude ignored items
+		$ignored = array_filter( $this->core->get_ignores($search) );
+		$excludeSql = '';
+		if ( !empty( $ignored ) ) {
+			$excludeSql = 'AND p.ID NOT IN (' . implode( ',', $ignored ) . ')';
+		}
 		return (int)$wpdb->get_var( "SELECT COUNT(*) FROM $wpdb->posts p 
 			WHERE post_type='attachment'
 			AND post_mime_type LIKE 'image/%'
-			$whereSql"
+			$whereSql
+			$excludeSql"
 		);
 	}
 
 	function rest_get_stats( $request ) {
 		$search = sanitize_text_field( $request->get_param('search') );
 		return new WP_REST_Response( [ 'success' => true, 'data' => array(
-			'issues' => $this->count_issues( $search ),
 			'ignored' => $this->count_ignored( $search ),
 			'optimizeIssues' => $this->count_optimize_issues( $search ),
 			'all' => $this->count_all( $search )
@@ -608,11 +614,25 @@ class Meow_WR2X_Rest
 		global $wpdb;
 		$whereIsIn = '';
 		if ( $filterBy !== 'all' ) {
-			$in = $this->get_filtered_post_ids( $filterBy );
+
+			$filtered = $this->get_filtered_post_ids( $filterBy );
+			if( empty( $filtered ) ) {
+				return array();
+			}
+
+			$in = array_filter( $filtered );
 			if ( empty( $in ) ) {
 				return array();
 			}
+			
 			$whereIsIn = 'AND p.ID IN (' . implode( ',', $in ) . ')';
+		}
+		else {
+			// For 'all', exclude ignored items
+			$ignored = array_filter( $this->core->get_ignores() );
+			if ( !empty( $ignored ) ) {
+				$whereIsIn = 'AND p.ID NOT IN (' . implode( ',', $ignored ) . ')';
+			}
 		}
 		$orderSql = 'ORDER BY p.ID DESC';
 		if ($orderBy === 'post_title') {
@@ -673,10 +693,6 @@ class Meow_WR2X_Rest
 
 	function get_filtered_post_ids( $filterBy ) {
 		switch ( $filterBy ) {
-			case 'issues':
-				return $this->core->get_issues();
-				break;
-
 			case 'ignored':
 				return $this->core->get_ignores();
 				break;
@@ -700,10 +716,7 @@ class Meow_WR2X_Rest
 		$search = sanitize_text_field( $request->get_param('search') );
 		$entries = $this->get_media_status( $skip, $limit, $filterBy, $orderBy, $order, $search );
 		$total = 0;
-		if ( $filterBy == 'issues' ) {
-			$total = $this->count_issues($search);
-		}
-		else if ( $filterBy == 'ignored' ) {
+		if ( $filterBy == 'ignored' ) {
 			$total = $this->count_ignored($search);
 		}
 		else if ( $filterBy == 'all' ) {
@@ -797,7 +810,7 @@ class Meow_WR2X_Rest
 		$this->engine->delete_webp_attachment( $mediaId, false );
 		$this->engine->delete_webp_retina_attachment( $mediaId, false );
 		$meta = wp_get_attachment_metadata( $mediaId );
-		$this->engine->generate_webp_images( $meta );
+		$this->engine->generate_modern_format( $meta );
 		$this->engine->generate_webp_retina_images( $meta );
 		do_action( 'wr2x_regenerate', $mediaId );
 
@@ -829,21 +842,27 @@ class Meow_WR2X_Rest
 
 	function rest_ignore( $request ) {
 		$params = $request->get_json_params();
-		$mediaId = isset( $params['mediaId'] ) ? (int)$params['mediaId'] : null;
+		$mediaIds = is_array( $params['mediaIds'] ) ? $params['mediaIds'] : array( $params['mediaIds'] );
 
 		// Check errors
-		if ( empty( $mediaId ) ) {
-			return new WP_REST_Response( [ 'success' => false, 'message' => "The Media ID is required." ] );
+		if ( empty( $mediaIds ) ) {
+			return new WP_REST_Response( [ 'success' => false, 'message' => "At least one Media ID is required." ] );
 		}
 
-		// Ignore
-		if ( $this->core->is_ignore( $mediaId ) ) {
-			$info = $this->core->remove_ignore( $mediaId );
+		// Toggle ignore status and collect media status
+		$infos = [];
+		foreach( $mediaIds as $mediaId ) {
+			if ( $this->core->is_ignore( $mediaId ) ) {
+				$this->core->remove_ignore( $mediaId );
+			}
+			else {
+				$this->core->add_ignore( $mediaId );
+			}
+			// Return updated media status
+			$infos[] = $this->core->get_media_status_one( $mediaId );
 		}
-		else {
-			$info = $this->core->add_ignore( $mediaId );
-		}
-		return new WP_REST_Response( [ 'success' => true, 'data' => $info  ], 200 );
+
+		return new WP_REST_Response( [ 'success' => true, 'data' => $infos  ], 200 );
 	}
 
 	function rest_regenerate( $request ) {
@@ -953,7 +972,7 @@ class Meow_WR2X_Rest
 		$options['easyio_domain'] = '';
 		$options['easyio_plan'] = '';
 		$options['webp_force_with_easyio'] = false;
-		update_option( $this->core->get_option_name(), $options );
+		$this->core->update_options( $options );
 		return new WP_REST_Response([ 'success' => true ], 200 );
 	}
 
@@ -981,7 +1000,7 @@ class Meow_WR2X_Rest
 					if ( !empty( $response['plan_id'] ) ) {
 						$options['easyio_plan'] = (int)$response['plan_id'];
 					}
-					update_option( $this->core->get_option_name(), $options );
+					$this->core->update_options( $options );
 
 					// Clear cache
 					// From https://github.com/nosilver4u/ewww-image-optimizer/blob/master/classes/class-exactdn.php#L298

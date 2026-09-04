@@ -55,6 +55,16 @@ class Meow_WR2X_Core {
 		add_filter( 'wp_calculate_image_srcset', array( $this, 'replace_with_webp_in_srcset' ), 1000, 5 );
 		add_filter( 'wp_get_attachment_image_src', array( $this,'replace_with_webp_in_src' ), 1000, 4 );
 
+		// By default the CDN is only applied to the srcset candidates, so the plain src of
+		// an image, og:image, download links and anything built from wp_get_attachment_url()
+		// keeps hitting the origin. This opt-in extends it to those URLs. Priority 1001 so
+		// replace_with_webp_in_src() still receives an origin URL it can map to a file.
+		$has_cdn = !empty( $options['easyio_domain'] ) || !empty( $options['cdn_domain'] );
+		if ( $has_cdn && ( $options['cdn_all_urls'] ?? false ) ) {
+			add_filter( 'wp_get_attachment_url', array( $this, 'cdn_attachment_url' ), 1001, 2 );
+			add_filter( 'wp_get_attachment_image_src', array( $this, 'cdn_attachment_image_src' ), 1001, 2 );
+		}
+
 		add_action( 'after_setup_theme', array( $this, 'add_image_sizes' ) );
 
 		if ( $options['image_replace'] ) {
@@ -68,8 +78,24 @@ class Meow_WR2X_Core {
 			add_filter( 'big_image_size_threshold', array( $this, 'big_image_size_threshold' ) );
 		}
 
+		// WP 7.1 client-side media processing builds sub-sizes in the browser from the list
+		// returned by wp_get_missing_image_subsizes(), and forces intermediate_image_sizes_advanced
+		// to an empty array during that upload. Our size suppression has to be declared on both
+		// filters or it is silently ignored. They share the ( $sizes, $image_meta ) signature,
+		// so the same callbacks work for both.
 		if ( $options['gif_thumbnails_disabled'] ?? false ) {
-			add_filter( 'intermediate_image_sizes_advanced', array( $this, 'disable_upload_sizes' ), 10, 2);
+			add_filter( 'intermediate_image_sizes_advanced', array( $this, 'disable_upload_sizes_gif' ), 10, 2);
+			add_filter( 'wp_get_missing_image_subsizes', array( $this, 'disable_upload_sizes_gif' ), 10, 2);
+		}
+
+		if( $options['avif_thumbnails_disabled'] ?? false ) {
+			add_filter( 'intermediate_image_sizes_advanced', array( $this, 'disable_upload_sizes_avif' ), 10, 2);
+			add_filter( 'wp_get_missing_image_subsizes', array( $this, 'disable_upload_sizes_avif' ), 10, 2);
+		}
+
+		if ( $options['webp_thumbnails_disabled'] ?? false ) {
+			add_filter( 'intermediate_image_sizes_advanced', array( $this, 'disable_upload_sizes_webp' ), 10, 2);
+			add_filter( 'wp_get_missing_image_subsizes', array( $this, 'disable_upload_sizes_webp' ), 10, 2);
 		}
 
 		// Disable Image-Sizes based on Settings.
@@ -218,9 +244,14 @@ class Meow_WR2X_Core {
 		$wr2x_disabled_sizes = $this->get_option( 'disabled_sizes', array() );
 		foreach ( $wr2x_disabled_sizes as $size ) {
 			remove_image_size( $size );
-			add_filter( 'image_size_names_choose', array( $this, 'unset_image_sizes' ) );
-			add_filter( 'intermediate_image_sizes_advanced', array( $this, 'unset_image_sizes' ) );
 		}
+		add_filter( 'image_size_names_choose', array( $this, 'unset_image_sizes' ) );
+		add_filter( 'intermediate_image_sizes_advanced', array( $this, 'unset_image_sizes' ) );
+		// remove_image_size() only works for sizes added via add_image_size(), never for the
+		// built-in ones (thumbnail, medium, medium_large, large). Those are suppressed by the
+		// filters alone, so wp_get_missing_image_subsizes() must be covered too: it is what
+		// WP 7.1 client-side processing reads to decide which sub-sizes the browser generates.
+		add_filter( 'wp_get_missing_image_subsizes', array( $this, 'unset_image_sizes' ) );
 	}
 
 	function unset_image_sizes( $sizes ) {
@@ -231,7 +262,13 @@ class Meow_WR2X_Core {
 		return $sizes;
 	}
 
-	function disable_upload_sizes( $sizes, $metadata ) {
+	function disable_upload_sizes_gif( $sizes, $metadata ) {
+		// wp_get_missing_image_subsizes() can pass metadata without a file (meta error),
+		// and wp_check_filetype( null ) is deprecated in PHP 8.1+.
+		if ( empty( $metadata['file'] ) ) {
+			return $sizes;
+		}
+
 		// Get filetype data.
 		$filetype = wp_check_filetype( $metadata['file'] );
 
@@ -242,6 +279,42 @@ class Meow_WR2X_Core {
 		}
 
 		// Return sizes you want to create from image (None if image is gif.)
+		return $sizes;
+	}
+
+	function disable_upload_sizes_avif( $sizes, $metadata ) {
+		if ( empty( $metadata['file'] ) ) {
+			return $sizes;
+		}
+
+		// Get filetype data.
+		$filetype = wp_check_filetype( $metadata['file'] );
+
+		// Check if is avif.
+		if( $filetype['type'] == 'image/avif' ) {
+			// Unset sizes if file is avif.
+			$sizes = array();
+		}
+
+		// Return sizes you want to create from image (None if image is avif.)
+		return $sizes;
+	}
+
+	function disable_upload_sizes_webp( $sizes, $metadata ) {
+		if ( empty( $metadata['file'] ) ) {
+			return $sizes;
+		}
+
+		// Get filetype data.
+		$filetype = wp_check_filetype( $metadata['file'] );
+
+		// Check if is webp.
+		if( $filetype['type'] == 'image/webp' ) {
+			// Unset sizes if file is webp.
+			$sizes = array();
+		}
+
+		// Return sizes you want to create from image (None if image is webp.)
 		return $sizes;
 	}
 
@@ -499,15 +572,10 @@ class Meow_WR2X_Core {
 			return $image;
 		}
 
-		$upload_dir = wp_upload_dir();
-		$pathinfo = pathinfo( $image[0] );
-		$filename = $pathinfo['basename'];
-		$webp_filename = $filename . $this->webp_avif_extension();
-		
-		$webp_path = trailingslashit( $upload_dir['path'] ) . $webp_filename;
+		$webp_url = $image[0] . $this->webp_avif_extension();
 
-		if ( file_exists( $webp_path ) ) {
-			$image[0] =  trailingslashit( $pathinfo['dirname'] ) . $webp_filename;
+		if ( $this->from_url_to_system( $webp_url ) ) {
+			$image[0] = $webp_url;
 		}
 
 		return $image;
@@ -695,53 +763,32 @@ class Meow_WR2X_Core {
 
 	// IGNORE
 
-	function calculate_ignores_by_search( $search ) {
-		$ids = get_transient( 'wr2x_ignores' );
-		if ( !$ids || !is_array( $ids ) ) {
-			return [];
-		}
-		global $wpdb;
-		$placeholders = implode( ',', array_fill( 0, count( $ids ), '%s' ) );
-		$ignores = $wpdb->get_col( $wpdb->prepare( "
-			SELECT p.ID FROM $wpdb->posts p
-			WHERE ID IN ($placeholders)
-			AND p.post_title LIKE %s
-		", array_merge( $ids, ['%' . $search . '%'] ) ) );
-		return $ignores;
-	}
-
 	function get_ignores( $search = '' ) {
+		global $wpdb;
+		$query = "SELECT DISTINCT pm.post_id FROM $wpdb->postmeta pm
+			INNER JOIN $wpdb->posts p ON pm.post_id = p.ID
+			WHERE pm.meta_key = '_wr2x_ignored'
+			AND pm.meta_value = '1'
+			AND p.post_type = 'attachment'";
 		if ( $search ) {
-			return $this->calculate_ignores_by_search( $search );
+			$query .= $wpdb->prepare( " AND p.post_title LIKE %s", '%' . $search . '%' );
 		}
-		$ignores = get_transient( 'wr2x_ignores' );
-		if ( !$ignores || !is_array( $ignores ) ) {
-			$ignores = array();
-			set_transient( 'wr2x_ignores', $ignores );
-		}
-		return $ignores;
+		return $wpdb->get_col( $query );
 	}
 
 	function is_ignore( $attachmentId ) {
-		$ignores = $this->get_ignores();
-		return in_array( $attachmentId, $ignores );
+		return (bool) get_post_meta( $attachmentId, '_wr2x_ignored', true );
 	}
 
 	function remove_ignore( $attachmentId ) {
-		$ignores = $this->get_ignores();
-		$ignores = array_diff( $ignores, array( $attachmentId ) );
-		set_transient( 'wr2x_ignores', $ignores );
-		return $ignores;
+		delete_post_meta( $attachmentId, '_wr2x_ignored' );
+		return $this->get_ignores();
 	}
 
 	function add_ignore( $attachmentId ) {
-		$ignores = $this->get_ignores();
-		if ( !in_array( $attachmentId, $ignores ) ) {
-			array_push( $ignores, $attachmentId );
-			set_transient( 'wr2x_ignores', $ignores );
-		}
+		update_post_meta( $attachmentId, '_wr2x_ignored', '1' );
 		$this->remove_issue( $attachmentId, true );
-		return $ignores;
+		return $this->get_ignores();
 	}
 
 	// OPTIMIZE ISSUES
@@ -1238,6 +1285,52 @@ class Meow_WR2X_Core {
 		return '/' . str_replace( $current_blog, '', $path );
 	}
 
+	// Front-end only: editors, REST clients and cron jobs keep the origin URLs, otherwise
+	// the media library, the block editor and third-party APIs would receive CDN URLs and
+	// could store them. REST_REQUEST is only defined once the request is parsed, which is
+	// why this is checked at call time rather than when the filters are registered.
+	function is_frontend_request() {
+		if ( is_admin() || wp_doing_ajax() || wp_doing_cron() ) {
+			return false;
+		}
+		if ( defined( 'REST_REQUEST' ) && REST_REQUEST ) {
+			return false;
+		}
+		if ( defined( 'WP_CLI' ) && WP_CLI ) {
+			return false;
+		}
+		return true;
+	}
+
+	function cdn_attachment_url( $url, $attachment_id ) {
+		if ( !$this->is_frontend_request() || !$this->is_cdn_url_allowed( $url, $attachment_id ) ) {
+			return $url;
+		}
+		return $this->cdn_this( $url, $attachment_id );
+	}
+
+	function cdn_attachment_image_src( $image, $attachment_id ) {
+		if ( is_array( $image ) && !empty( $image[0] ) && $this->is_frontend_request()
+			&& $this->is_cdn_url_allowed( $image[0], $attachment_id ) ) {
+			$image[0] = $this->cdn_this( $image[0], $attachment_id );
+		}
+		return $image;
+	}
+
+	// wp_get_attachment_url() is used for every attachment, not only images: PDFs, zips,
+	// audio, files sold through EDD or WooCommerce... An image CDN like Easy IO either
+	// 404s on those or proxies them for nothing, so only images are rewritten.
+	function is_cdn_url_allowed( $url, $attachment_id = null ) {
+		$mime = !empty( $attachment_id ) ? get_post_mime_type( $attachment_id ) : false;
+		if ( empty( $mime ) ) {
+			$path = parse_url( $url, PHP_URL_PATH );
+			$filetype = wp_check_filetype( $path ? basename( $path ) : '' );
+			$mime = $filetype['type'];
+		}
+		$allowed = !empty( $mime ) && strpos( $mime, 'image/' ) === 0;
+		return apply_filters( 'wr2x_cdn_url_allowed', $allowed, $url, $attachment_id, $mime );
+	}
+
 	// Rename this filename with CDN
 	function cdn_this( $url, $mediaId = null ) {
 
@@ -1287,7 +1380,8 @@ class Meow_WR2X_Core {
 		}
 
 		$this->log( "URL before CDN: $url" );
-		$queryUrl = !empty( $cdn_params ) ? ( '?' . http_build_query( $cdn_params ) ) : '';
+		$separator = empty( $parsed_url['query'] ) ? '?' : '&';
+		$queryUrl = !empty( $cdn_params ) ? ( $separator . http_build_query( $cdn_params ) ) : '';
 		$url_host = $parsed_url['host'];
 		$new_url = str_replace( '//' . $url_host, '//' . $cdn_domain, $url ) . $queryUrl;
 		$this->log( "URL with CDN: $new_url" );
@@ -2356,6 +2450,7 @@ class Meow_WR2X_Core {
 			'over_http_check' => false,
 			'easyio_domain' => '',
 			'cdn_domain' => '',
+			'cdn_all_urls' => false,
 			'easyio_lossless' => '',
 			'debug' => false,
 			'logs' => false,
@@ -2367,6 +2462,8 @@ class Meow_WR2X_Core {
 			'module_optimize_enabled' => true,
 			'module_ui_enabled' => true,
 			'gif_thumbnails_disabled' => true,
+			'avif_thumbnails_disabled' => false,
+			'webp_thumbnails_disabled' => false,
 			'hide_admin_messages' => false,
 			'logs_path' => null,
 			'custom_image_sizes' => [],
@@ -2384,6 +2481,7 @@ class Meow_WR2X_Core {
 			'webp_retina_sizes' => [],
 			'webp_sizes' => [],
 			'webp_method' => 'none',
+			'webp_ignored_extensions' => ['gif', 'svg', 'bmp', 'tiff'],
 
 			// AI
 			'module_ai_enabled' => false,
@@ -2502,11 +2600,30 @@ class Meow_WR2X_Core {
 	}
 
 	function update_options( $options ) {
+		$old_options = $this->get_all_options();
 		if ( !update_option( $this->option_name, $options, false ) ) {
 			return false;
 		}
 		$options = $this->sanitize_options();
+		$this->notify_cdn_settings_changed( $old_options, $options );
 		return $options;
+	}
+
+	// Other plugins cache image URLs (Meow Lightbox keeps them in transients for a day),
+	// so they need to know when the CDN goes on, off or changes domain.
+	function notify_cdn_settings_changed( $old_options, $new_options ) {
+		$keys = array( 'easyio_domain', 'cdn_domain', 'cdn_all_urls' );
+		$changed = array();
+		foreach ( $keys as $key ) {
+			$old = $old_options[$key] ?? null;
+			$new = $new_options[$key] ?? null;
+			if ( (string)$old !== (string)$new && !( empty( $old ) && empty( $new ) ) ) {
+				$changed[$key] = array( 'old' => $old, 'new' => $new );
+			}
+		}
+		if ( !empty( $changed ) ) {
+			do_action( 'wr2x_cdn_settings_changed', $changed, $new_options );
+		}
 	}
 
 	function update_option( $option, $value ) {

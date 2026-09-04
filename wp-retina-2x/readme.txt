@@ -3,9 +3,9 @@ Contributors: TigrouMeow
 Tags: retina, webp, avif, thumbnails, regenerate
 Donate link: https://www.patreon.com/meowapps
 Requires at least: 6.0
-Tested up to: 6.9
-Requires PHP: 7.4
-Stable tag: 7.1.3
+Tested up to: 7.1
+Requires PHP: 8.1
+Stable tag: 7.2.0
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -192,6 +192,52 @@ Absolutely. Use the built-in Easy IO integration, or enter your own CDN domain i
 Yes! Perfect Images lets you disable any registered size—WordPress defaults, theme sizes, plugin sizes—complete control.
 
 == Changelog ==
+
+= 7.2.0 (2026/09/04) =
+* Add: Option to serve all image URLs through Easy IO or the CDN, not only srcset.
+* Update: CDN URL rewriting now applies to images only, so PDFs and other files keep their original URL.
+* Add: Action fired when CDN settings change, allowing Meow Lightbox to clear its cached image URLs.
+* Update: The plugins list now shows the actual license issue instead of a generic label.
+* Fix: Error when media status data was empty.
+* Update: Admin script loading priority and conditions.
+* 🎵 Discuss with others about Wp Retina 2x on [the Discord](https://discord.gg/bHDGh38).
+* 🌴 Keep us motivated with [a little review here](https://wordpress.org/support/plugin/wp-retina-2x/reviews/). Thank you!
+* 🥰 If you want to help us, check our [Patreon](https://www.patreon.com/meowapps). Thank you!
+
+= 7.1.9 (2026/08/20) =
+* Add: Plugins board and AI analysis in the dashboard.
+* Update: Minimum PHP version is now 8.1.
+* Update: Native browser dialogs replaced with a NekoUI notice modal.
+* Fix: Disabled image sizes were ignored during WordPress 7.1 client-side uploads.
+* Fix: AVIF files were duplicated as avif.avif on existing AVIF images.
+
+= 7.1.8 (2026/06/29) =
+* Fix: Ensure correct file permissions are set for generated WebP and AVIF images.
+* Fix: Preserve original dimensions during retina image upload when they already match.
+* 🎵 Discuss with others about Wp Retina 2x on [the Discord](https://discord.gg/bHDGh38).
+* 🌴 Keep us motivated with [a little review here](https://wordpress.org/support/plugin/wp-retina-2x/reviews/). Thank you!
+* 🥰 If you want to help us, check our [Patreon](https://www.patreon.com/meowapps). Thank you!
+
+= 7.1.7 (2026/05/30) =
+* Fix: Fixed dashboard styling for NekoUI 2026.
+* Fix: Fixed missing historyReader reference.
+* Fix: Fixed rendering loop with tooltip.
+* Fix: Ensure correct file permissions for generated WebP/AVIF images.
+
+= 7.1.6 (2026/04/25) =
+* Update: Reworked the ignore workflow for image entries in the dashboard.
+* Fix: Engine functions now correctly check whether an image is set to ignored before processing.
+* Update: Better UI/UX.
+* 🎵 Discuss with others about Wp Retina 2x on [the Discord](https://discord.gg/bHDGh38).
+* 🌴 Keep us motivated with [a little review here](https://wordpress.org/support/plugin/wp-retina-2x/reviews/). Thank you!
+* 🥰 If you want to help us, check our [Patreon](https://www.patreon.com/meowapps). Thank you!
+
+= 7.1.5 (2026/04/15) =
+* Add: Meta box in the attachment editor for regenerating thumbnails directly from the media edit screen.
+
+= 7.1.4 (2026/03/10) =
+* Add: New options to disable AVIF and WebP thumbnail generation.
+* Add: Ignore list for modern image formats so specific images or paths can be excluded from AVIF and WebP processing.
 
 = 7.1.3 (2026/02/23) =
 * Fix: Hotfix to prevent Easy IO and Modern Formats from being enabled at the same time.
